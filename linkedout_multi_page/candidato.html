@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedOut - Área do Candidato</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="brand-section">
+                <a href="index.html" class="logo"><i class="fa-brands fa-linkedin"></i> LinkedOut</a>
+                <span class="role-badge candidato">Candidato</span>
+            </div>
+            <div class="nav-user">
+                <div class="user-card">
+                    <div class="avatar" id="user-avatar">C</div>
+                    <span id="user-display-name" style="font-weight: 600; font-size: 0.9rem;">Candidato</span>
+                </div>
+                <button class="btn-nav" onclick="logout()" title="Trocar Perfil / Sair"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <div class="linkedin-grid">
+            <!-- Left Pane: Job List -->
+            <div class="jobs-sidebar">
+                <div class="sidebar-header">
+                    <h3 style="font-size: 1rem;"><i class="fa-solid fa-briefcase"></i> Vagas em Destaque</h3>
+                    <div class="filter-pills">
+                        <button class="pill-btn active" onclick="setCategoryFilter('TODOS', this)">Todas</button>
+                        <button class="pill-btn" onclick="setCategoryFilter('TI', this)">TI / Prog</button>
+                        <button class="pill-btn" onclick="setCategoryFilter('ADM', this)">Administração</button>
+                    </div>
+                </div>
+                <div class="jobs-list" id="jobs-container"></div>
+            </div>
+
+            <!-- Right Pane: Interactive Detail Island -->
+            <div class="detail-island" id="detail-island-container">
+                <!-- Dynamic Content via JS -->
+            </div>
+        </div>
+    </main>
+
+    <script src="sync.js"></script>
+    <script>
+        let currentUser = getCurrentUser();
+        let selectedJobId = null;
+        let currentFilter = 'TODOS';
+
+        if (!currentUser || currentUser.role !== 'candidato') {
+            alert('Acesso restrito. Faça login como candidato.');
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('user-display-name').innerText = currentUser.name;
+        document.getElementById('user-avatar').innerText = currentUser.name.charAt(0).toUpperCase();
+
+        function logout() {
+            window.location.href = 'index.html';
+        }
+
+        function setCategoryFilter(category, btn) {
+            currentFilter = category;
+            document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            renderJobList();
+        }
+
+        function renderJobList() {
+            const jobs = getJobs();
+            const container = document.getElementById('jobs-container');
+
+            const filtered = jobs.filter(j => currentFilter === 'TODOS' || j.category === currentFilter);
+
+            if (filtered.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>Nenhuma vaga encontrada para esta área.</p></div>';
+                return;
+            }
+
+            if (!selectedJobId || !filtered.some(j => j.id === selectedJobId)) {
+                selectedJobId = filtered[0].id;
+            }
+
+            container.innerHTML = filtered.map(j => `
+                <div class="job-card-item ${j.id === selectedJobId ? 'selected' : ''}" onclick="selectJob('${j.id}')">
+                    <div class="job-card-title">${j.title}</div>
+                    <div class="job-card-company">${j.company}</div>
+                    <div class="job-card-meta">
+                        <span><i class="fa-solid fa-location-dot"></i> ${j.location}</span>
+                        <span><i class="fa-solid fa-tag"></i> ${j.category}</span>
+                    </div>
+                </div>
+            `).join('');
+
+            renderDetailIsland();
+        }
+
+        function selectJob(id) {
+            selectedJobId = id;
+            renderJobList();
+        }
+
+        function renderDetailIsland() {
+            const jobs = getJobs();
+            const apps = getApplications();
+            const container = document.getElementById('detail-island-container');
+
+            const job = jobs.find(j => j.id === selectedJobId);
+            if (!job) {
+                container.innerHTML = '<div class="empty-state"><p>Selecione uma vaga no menu ao lado.</p></div>';
+                return;
+            }
+
+            const myApp = apps.find(a => a.jobId === job.id && a.candidateName === currentUser.name);
+
+            container.innerHTML = `
+                <div class="detail-header">
+                    <div class="detail-title">${job.title}</div>
+                    <div class="detail-company"><i class="fa-solid fa-building"></i> ${job.company}</div>
+                    <div class="detail-meta-pills">
+                        <span class="meta-badge"><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
+                        <span class="meta-badge"><i class="fa-solid fa-graduation-cap"></i> Requisito: Ensino Médio Técnico (${job.category})</span>
+                    </div>
+                </div>
+
+                <div class="detail-body">
+                    <h4 style="margin-bottom: 0.5rem; color: #555;">Descrição da Oportunidade</h4>
+                    <p>${job.description}</p>
+                </div>
+
+                <div style="border-top: 1px solid var(--border-color); padding-top: 1.2rem;">
+                    ${myApp ? `
+                        <div style="background: #f8f9fa; border: 1px solid var(--border-color); padding: 1.2rem; border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+                                <strong>Status da sua Candidatura:</strong>
+                                <span class="status-badge status-${myApp.status}">${myApp.status}</span>
+                            </div>
+                            <p style="font-size: 0.85rem; color: #666; margin-bottom: 0.4rem;"><strong>Nota enviada ao recrutador:</strong> "${myApp.note}"</p>
+                            <small style="color: #999;">Candidatura registrada para o recrutador visualizar ao vivo.</small>
+                        </div>
+                    ` : `
+                        <h4 style="margin-bottom: 0.8rem; color: var(--primary);"><i class="fa-solid fa-paper-plane"></i> Candidatar-se a esta vaga</h4>
+                        <div class="form-group">
+                            <label>Apresentação Curta (Ex: Formação, cursos e por que quer a vaga)</label>
+                            <textarea id="app-note" class="form-control" rows="3" placeholder="Escreva uma breve nota para o recrutador..."></textarea>
+                        </div>
+                        <button class="btn-primary" onclick="submitApplication('${job.id}')"><i class="fa-solid fa-check"></i> Enviar Candidatura Instantânea</button>
+                    `}
+                </div>
+            `;
+        }
+
+        function submitApplication(jobId) {
+            const noteInput = document.getElementById('app-note');
+            const note = noteInput ? noteInput.value.trim() : '';
+
+            if (!note) {
+                alert('Escreva uma breve nota de apresentação antes de enviar.');
+                return;
+            }
+
+            const apps = getApplications();
+            apps.push({
+                id: 'app-' + Date.now(),
+                jobId: jobId,
+                candidateName: currentUser.name,
+                note: note,
+                status: 'Pendente',
+                appliedAt: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+            });
+
+            saveApplications(apps);
+            renderDetailIsland();
+        }
+
+        // Live Syncing Callback
+        onRealtimeUpdate(() => {
+            renderJobList();
+        });
+
+        // Initial Load
+        renderJobList();
+    </script>
+</body>
+</html>
