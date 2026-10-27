@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LinkedOut - Painel do Recrutador (PC)</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="brand-section">
+                <a href="index.html" class="logo"><i class="fa-brands fa-linkedin"></i> LinkedOut</a>
+                <span class="role-badge recrutador">Painel do Recrutador (PC)</span>
+            </div>
+            <div class="nav-user">
+                <div class="user-card">
+                    <div class="avatar" id="user-avatar" style="background: var(--warning);">R</div>
+                    <span id="user-display-name" style="font-weight: 600; font-size: 0.9rem;">Recrutador</span>
+                </div>
+                <button class="btn-nav" onclick="logout()" title="Sair"><i class="fa-solid fa-right-from-bracket"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <div class="network-bar">
+        <div class="network-container">
+            <div class="peer-status">
+                <span class="status-indicator" id="network-indicator"></span>
+                <span id="network-status">Aguardando conexão dos celulares da sala...</span>
+            </div>
+        </div>
+    </div>
+
+    <main>
+        <div class="linkedin-grid">
+            <!-- Left Pane: Recruiter Job Selection & Actions -->
+            <div class="jobs-sidebar">
+                <div class="sidebar-header" style="display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="font-size: 1rem;"><i class="fa-solid fa-folder-open"></i> Vagas Anunciadas</h3>
+                    <button class="pill-btn active" onclick="openNewJobModal()"><i class="fa-solid fa-plus"></i> Publicar Vaga</button>
+                </div>
+                <div class="jobs-list" id="recruiter-jobs-container"></div>
+            </div>
+
+            <!-- Right Pane: Applicants Management Island -->
+            <div class="detail-island" id="detail-island-container"></div>
+        </div>
+    </main>
+
+    <!-- Modal Criar Nova Vaga -->
+    <div id="new-job-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+        <div style="background: white; padding: 2rem; border-radius: 8px; width: 90%; max-width: 500px;">
+            <h3><i class="fa-solid fa-plus-circle"></i> Criar Nova Vaga para os Alunos</h3>
+            <br>
+            <form onsubmit="handleCreateJob(event)">
+                <div class="form-group">
+                    <label>Título da Vaga</label>
+                    <input type="text" id="new-title" class="form-control" placeholder="Ex: Auxiliar de Suporte" required>
+                </div>
+                <div class="form-group">
+                    <label>Empresa</label>
+                    <input type="text" id="new-company" class="form-control" placeholder="Ex: Tech Soluções" required>
+                </div>
+                <div class="form-group">
+                    <label>Área Técnica</label>
+                    <select id="new-category" class="form-control" required>
+                        <option value="TI">Técnico em Programação / TI</option>
+                        <option value="ADM">Técnico em Administração</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Localização</label>
+                    <input type="text" id="new-location" class="form-control" placeholder="Ex: Jaraguá do Sul - SC" required>
+                </div>
+                <div class="form-group">
+                    <label>Descrição detalhada</label>
+                    <textarea id="new-desc" class="form-control" rows="3" placeholder="Atividades..." required></textarea>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem;">
+                    <button type="button" class="pill-btn" onclick="closeNewJobModal()">Cancelar</button>
+                    <button type="submit" class="btn-primary" style="width: auto;">Publicar no Celular dos Alunos</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="network.js"></script>
+    <script>
+        let currentUser = getCurrentUser();
+        let selectedJobId = null;
+
+        if (!currentUser || currentUser.role !== 'recrutador') {
+            alert('Acesso restrito. Entre como recrutador.');
+            window.location.href = 'index.html';
+        }
+
+        document.getElementById('user-display-name').innerText = currentUser.name;
+        document.getElementById('user-avatar').innerText = currentUser.name.charAt(0).toUpperCase();
+
+        function logout() {
+            window.location.href = 'index.html';
+        }
+
+        function renderJobList() {
+            const jobs = getJobs();
+            const apps = getApplications();
+            const container = document.getElementById('recruiter-jobs-container');
+
+            if (jobs.length === 0) {
+                container.innerHTML = '<div class="empty-state"><p>Nenhuma vaga.</p></div>';
+                return;
+            }
+
+            if (!selectedJobId || !jobs.some(j => j.id === selectedJobId)) {
+                selectedJobId = jobs[0].id;
+            }
+
+            container.innerHTML = jobs.map(j => {
+                const count = apps.filter(a => a.jobId === j.id).length;
+                return `
+                    <div class="job-card-item ${j.id === selectedJobId ? 'selected' : ''}" onclick="selectJob('${j.id}')">
+                        <div class="job-card-title">${j.title}</div>
+                        <div class="job-card-company">${j.company}</div>
+                        <div class="job-card-meta">
+                            <span><i class="fa-solid fa-users"></i> ${count} candidato(s) ao vivo</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            renderDetailIsland();
+        }
+
+        function selectJob(id) {
+            selectedJobId = id;
+            renderJobList();
+        }
+
+        function renderDetailIsland() {
+            const jobs = getJobs();
+            const apps = getApplications();
+            const container = document.getElementById('detail-island-container');
+
+            const job = jobs.find(j => j.id === selectedJobId);
+            if (!job) return;
+
+            const jobApps = apps.filter(a => a.jobId === job.id);
+
+            container.innerHTML = `
+                <div class="detail-header">
+                    <div class="detail-title">${job.title}</div>
+                    <div class="detail-company"><i class="fa-solid fa-building"></i> ${job.company}</div>
+                    <div class="detail-meta-pills">
+                        <span class="meta-badge"><i class="fa-solid fa-signal"></i> ${jobApps.length} Candidato(s) Conectados</span>
+                        <span class="meta-badge"><i class="fa-solid fa-location-dot"></i> ${job.location}</span>
+                    </div>
+                </div>
+
+                <h4 style="margin-bottom: 1rem; color: var(--primary);"><i class="fa-solid fa-user-check"></i> Candidaturas Chegando dos Celulares</h4>
+
+                ${jobApps.length === 0 ? `
+                    <div class="empty-state">
+                        <i class="fa-solid fa-mobile-screen-button"></i>
+                        <p>Aguardando candidatos clicarem em se candidatar no celular...</p>
+                        <small>Assim que um aluno se candidatar, ele aparecerá aqui sem recarregar a tela.</small>
+                    </div>
+                ` : `
+                    <div>
+                        ${jobApps.map(app => `
+                            <div class="applicant-item">
+                                <div class="applicant-head">
+                                    <strong style="font-size: 1rem; color: #111;"><i class="fa-solid fa-user-graduate"></i> ${app.candidateName}</strong>
+                                    <span class="status-badge status-${app.status}">${app.status}</span>
+                                </div>
+                                <p style="font-size: 0.9rem; color: #444; margin: 0.4rem 0;"><strong>Mensagem enviada pelo celular:</strong> "${app.note}"</p>
+                                <small style="color: #888;">Horário: ${app.appliedAt}</small>
+
+                                <div class="action-row">
+                                    <button class="btn-sm-success" onclick="changeStatus('${app.id}', 'Aceito')"><i class="fa-solid fa-check"></i> Aceitar e Notificar Celular</button>
+                                    <button class="btn-sm-danger" onclick="changeStatus('${app.id}', 'Rejeitado')"><i class="fa-solid fa-xmark"></i> Rejeitar</button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `}
+            `;
+        }
+
+        function changeStatus(appId, newStatus) {
+            const apps = getApplications();
+            const app = apps.find(a => a.id === appId);
+            if (app) {
+                app.status = newStatus;
+                saveAndBroadcastApps(apps);
+                renderDetailIsland();
+            }
+        }
+
+        function openNewJobModal() {
+            document.getElementById('new-job-modal').style.display = 'flex';
+        }
+
+        function closeNewJobModal() {
+            document.getElementById('new-job-modal').style.display = 'none';
+        }
+
+        function handleCreateJob(e) {
+            e.preventDefault();
+            const jobs = getJobs();
+
+            const newJob = {
+                id: 'job-' + Date.now(),
+                title: document.getElementById('new-title').value,
+                company: document.getElementById('new-company').value,
+                category: document.getElementById('new-category').value,
+                location: document.getElementById('new-location').value,
+                description: document.getElementById('new-desc').value,
+                recruiter: currentUser.name
+            };
+
+            jobs.unshift(newJob);
+            saveAndBroadcastJobs(jobs);
+
+            closeNewJobModal();
+            selectedJobId = newJob.id;
+            renderJobList();
+            e.target.reset();
+        }
+
+        // Initialize Peer as RECRUITER MASTER
+        const roomCode = getRoomCode();
+        // Force master ID for recruiter
+        initNetwork(roomCode + '-RECRUITER', () => {
+            renderJobList();
+        });
+
+        renderJobList();
+    </script>
+</body>
+</html>
